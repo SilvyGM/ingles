@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LanguageLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+}
+
+enum SessionStatus {
+  started
+  processing
+  completed
+  failed
+  cancelled
+}
+
+enum FeedbackType {
+  grammar
+  pronunciation
+  fluency
+  vocabulary
+  semantic
+}
+
+enum SeverityLevel {
+  low
+  medium
+  high
+}
+
+enum QuestionType {
+  multiple_choice
+  cloze
+  open_text
+  reverse_translation
+}
+
+enum GeneratedTestStatus {
+  generated
+  in_progress
+  submitted
+  graded
+  cancelled
+}
+
+enum GeneratedReason {
+  weak_skill
+  session_followup
+  scheduled_practice
+  manual_assignment
+}
+
+model User {
+  id                   String                @id @default(uuid()) @db.Uuid
+  email                String                @unique @db.VarChar(255)
+  fullName             String                @map("full_name") @db.VarChar(150)
+  targetLanguage       String                @map("target_language") @db.VarChar(10)
+  currentLevel         String                @map("current_level") @db.VarChar(10)
+  xpTotal              Int                   @default(0) @map("xp_total")
+  currentStreak        Int                   @default(0) @map("current_streak")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  conversationSessions ConversationSession[]
+  generatedTests       GeneratedTest[]
+  skillProgress        SkillProgress[]
+
+  @@map("users")
+}
+
+model Topic {
+  id                   String                @id @default(uuid()) @db.Uuid
+  name                 String                @db.VarChar(120)
+  slug                 String                @unique @db.VarChar(140)
+  category             String                @db.VarChar(80)
+  difficultyLevel      String                @map("difficulty_level") @db.VarChar(10)
+  isActive             Boolean               @default(true) @map("is_active")
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversationSessions ConversationSession[]
+  generatedTests       GeneratedTest[]
+  questions            Question[]
+  skillProgress        SkillProgress[]
+
+  @@map("topics")
+}
+
+model Skill {
+  id           String          @id @default(uuid()) @db.Uuid
+  code         String          @unique @db.VarChar(60)
+  name         String          @db.VarChar(120)
+  category     String          @db.VarChar(80)
+  description  String?         @db.Text
+  isActive     Boolean         @default(true) @map("is_active")
+  questions    Question[]
+  skillProgress SkillProgress[]
+
+  @@map("skills")
+}
+
+model ConversationSession {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  userId             String                 @map("user_id") @db.Uuid
+  topicId            String                 @map("topic_id") @db.Uuid
+  status             String                 @default("started") @db.VarChar(20)
+  startedAt          DateTime               @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt            DateTime?              @map("ended_at") @db.Timestamptz(6)
+  transcriptText     String?                @map("transcript_text") @db.Text
+  fluencyScore       Decimal?               @map("fluency_score") @db.Decimal(5, 2)
+  pronunciationScore Decimal?               @map("pronunciation_score") @db.Decimal(5, 2)
+  grammarScore       Decimal?               @map("grammar_score") @db.Decimal(5, 2)
+  overallScore       Decimal?               @map("overall_score") @db.Decimal(5, 2)
+  audioUrl           String?                @map("audio_url") @db.Text
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic              Topic                  @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  feedback           ConversationFeedback[]
+  generatedTests     GeneratedTest[]
+
+  @@index([userId])
+  @@index([topicId])
+  @@index([status])
+  @@map("conversation_sessions")
+}
+
+model ConversationFeedback {
+  id                  String              @id @default(uuid()) @db.Uuid
+  sessionId           String              @map("session_id") @db.Uuid
+  feedbackType        String              @map("feedback_type") @db.VarChar(30)
+  sourceFragment      String?             @map("source_fragment") @db.Text
+  detectedIssue       String              @map("detected_issue") @db.Text
+  suggestedCorrection String?             @map("suggested_correction") @db.Text
+  severity            String              @db.VarChar(20)
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  session             ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("conversation_feedback")
+}
+
+model Question {
+  id              String        @id @default(uuid()) @db.Uuid
+  topicId         String        @map("topic_id") @db.Uuid
+  skillId         String        @map("skill_id") @db.Uuid
+  questionType    String        @map("question_type") @db.VarChar(30)
+  promptText      String        @map("prompt_text") @db.Text
+  correctAnswer   String        @map("correct_answer") @db.Text
+  difficultyLevel String        @map("difficulty_level") @db.VarChar(10)
+  explanationText String?       @map("explanation_text") @db.Text
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  topic           Topic         @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  skill           Skill         @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  testAnswers     TestAnswer[]
+
+  @@index([topicId, skillId])
+  @@map("questions")
+}
+
+model GeneratedTest {
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @map("user_id") @db.Uuid
+  topicId         String?              @map("topic_id") @db.Uuid
+  sourceSessionId String?              @map("source_session_id") @db.Uuid
+  status          String               @default("generated") @db.VarChar(20)
+  totalQuestions  Int                  @default(0) @map("total_questions")
+  score           Decimal?             @db.Decimal(5, 2)
+  generatedReason String               @map("generated_reason") @db.VarChar(50)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  submittedAt     DateTime?            @map("submitted_at") @db.Timestamptz(6)
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic           Topic?               @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  sourceSession   ConversationSession? @relation(fields: [sourceSessionId], references: [id], onDelete: SetNull)
+  testAnswers     TestAnswer[]
+
+  @@index([userId])
+  @@index([sourceSessionId])
+  @@map("generated_tests")
+}
+
+model TestAnswer {
+  id              String        @id @default(uuid()) @db.Uuid
+  generatedTestId String        @map("generated_test_id") @db.Uuid
+  questionId      String        @map("question_id") @db.Uuid
+  userAnswer      String?       @map("user_answer") @db.Text
+  isCorrect       Boolean?      @map("is_correct")
+  feedbackText    String?       @map("feedback_text") @db.Text
+  answeredAt      DateTime?     @map("answered_at") @db.Timestamptz(6)
+  generatedTest   GeneratedTest @relation(fields: [generatedTestId], references: [id], onDelete: Cascade)
+  question        Question      @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([generatedTestId, questionId])
+  @@index([generatedTestId])
+  @@map("test_answers")
+}
+
+model SkillProgress {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  skillId        String        @map("skill_id") @db.Uuid
+  topicId        String?       @map("topic_id") @db.Uuid
+  masteryLevel   Decimal       @default(0) @map("mastery_level") @db.Decimal(5, 2)
+  lastScore      Decimal?      @map("last_score") @db.Decimal(5, 2)
+  lastPracticedAt DateTime?    @map("last_practiced_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill          Skill         @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  topic          Topic?        @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([skillId])
+  @@index([topicId])
+  @@map("skill_progress")
+}
